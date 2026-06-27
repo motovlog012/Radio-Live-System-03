@@ -1,0 +1,155 @@
+// Prisma schema - Radio Live Broadcasting Management System
+// Production datasource: PostgreSQL (wajib untuk mendukung enum Role,
+// RequestStatus, BroadcastState — SQLite tidak mendukung tipe enum
+// sehingga sebelumnya menyebabkan error P1012 saat `prisma generate`).
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  PENYIAR
+  OPERATOR
+  GURU
+  SISWA
+  GUEST
+}
+
+enum RequestStatus {
+  MENUNGGU
+  DIPUTAR
+  DITOLAK
+  DIPINDAHKAN
+  SELESAI
+}
+
+enum BroadcastState {
+  STOPPED
+  LIVE
+  PAUSED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          Role     @default(GUEST)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  schedules     Schedule[]
+  announcements Announcement[]
+  logs          ActivityLog[]
+}
+
+model Song {
+  id        String   @id @default(uuid())
+  title     String
+  artist    String
+  filePath  String?
+  duration  Int? // seconds
+  genre     String?
+  tags      String? // comma separated
+  createdAt DateTime @default(now())
+
+  playlistItems PlaylistItem[]
+  requests      SongRequest[]
+}
+
+model Playlist {
+  id        String   @id @default(uuid())
+  name      String
+  isFavorite Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  items     PlaylistItem[]
+  schedules Schedule[]
+}
+
+model PlaylistItem {
+  id         String   @id @default(uuid())
+  playlistId String
+  songId     String
+  order      Int      @default(0)
+
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song       Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+}
+
+model SongRequest {
+  id          String        @id @default(uuid())
+  studentName String
+  className   String?
+  songTitle   String
+  artist      String?
+  message     String?
+  emoji       String?
+  externalUrl String?
+  isAnonymous Boolean       @default(false)
+  status      RequestStatus @default(MENUNGGU)
+  queueDate   DateTime      @default(now()) // tanggal antrean (bisa dipindah ke hari berikutnya)
+  priority    Int           @default(0)
+  songId      String?
+  song        Song?         @relation(fields: [songId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Schedule {
+  id           String   @id @default(uuid())
+  title        String
+  dayOfWeek    Int? // 0-6, null jika tanggal spesifik
+  specificDate DateTime?
+  startTime    String // "HH:mm"
+  endTime      String // "HH:mm"
+  playlistId   String?
+  playlist     Playlist? @relation(fields: [playlistId], references: [id])
+  broadcasterId String?
+  broadcaster  User?     @relation(fields: [broadcasterId], references: [id])
+  autoStart    Boolean  @default(true)
+  autoStop     Boolean  @default(true)
+  isHoliday    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
+
+model Announcement {
+  id         String   @id @default(uuid())
+  title      String
+  content    String
+  type       String   @default("text") // text, image, video, pdf, audio
+  mediaUrl   String?
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id])
+  isPinned   Boolean  @default(false)
+  startsAt   DateTime?
+  endsAt     DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model BroadcastSession {
+  id         String         @id @default(uuid())
+  state      BroadcastState @default(STOPPED)
+  listeners  Int            @default(0)
+  currentSongId String?
+  startedAt  DateTime?
+  endedAt    DateTime?
+  createdAt  DateTime       @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+}

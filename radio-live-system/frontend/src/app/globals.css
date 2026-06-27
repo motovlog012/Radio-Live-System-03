@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-light: #f4f6fb;
+  --bg-dark: #0b0e1a;
+}
+
+body {
+  @apply bg-[var(--bg-light)] dark:bg-[var(--bg-dark)] text-slate-800 dark:text-slate-100 transition-colors;
+}
+
+.glass-card {
+  @apply backdrop-blur-xl bg-white/60 dark:bg-white/5 border border-white/40 dark:border-white/10 rounded-2xl shadow-lg shadow-black/5;
+}
+
+.btn-primary {
+  @apply px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 rounded-xl glass-card hover:bg-white/80 dark:hover:bg-white/10 font-medium transition-colors;
+}
+
+.input-field {
+  @apply w-full px-4 py-2 rounded-xl glass-card outline-none focus:ring-2 focus:ring-brand-400 bg-white/70 dark:bg-white/5;
+}
+
+.badge {
+  @apply text-xs px-2 py-1 rounded-full font-medium;
+}

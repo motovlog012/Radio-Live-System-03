@@ -1,0 +1,121 @@
+version: "3.9"
+
+# ===================================================================
+# Radio Live Broadcasting Management System — docker-compose
+#
+# PostgreSQL WAJIB (database default project ini sejak mendukung enum
+# Role/RequestStatus/BroadcastState — SQLite tidak mendukung enum).
+#
+# Jalankan:
+#   docker compose up --build
+#
+# Mode dengan server streaming Icecast (opsional, untuk live audio nyata):
+#   docker compose --profile streaming up --build
+#
+# Mode produksi dengan Nginx reverse proxy:
+#   docker compose --profile production up --build
+# ===================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: radio-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: radio
+      POSTGRES_PASSWORD: radio_password
+      POSTGRES_DB: radio_live
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radio"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - radio-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: radio-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - radio-net
+
+  backend:
+    build:
+      context: ./backend
+    container_name: radio-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override DATABASE_URL agar selalu mengarah ke service "db" di atas,
+      # terlepas dari isi backend/.env (yang mungkin masih placeholder).
+      DATABASE_URL: postgresql://radio:radio_password@db:5432/radio_live?schema=public
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - radio-net
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: radio-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env
+    depends_on:
+      - backend
+    networks:
+      - radio-net
+
+  # Icecast - opsional, server streaming audio nyata. Aktifkan dengan --profile streaming
+  icecast:
+    image: moul/icecast
+    container_name: radio-icecast
+    restart: unless-stopped
+    profiles: ["streaming"]
+    ports:
+      - "8000:8000"
+    environment:
+      ICECAST_SOURCE_PASSWORD: change_me_source
+      ICECAST_ADMIN_PASSWORD: change_me_admin
+      ICECAST_PASSWORD: change_me_relay
+    networks:
+      - radio-net
+
+  # Nginx reverse proxy - opsional untuk produksi
+  nginx:
+    image: nginx:alpine
+    container_name: radio-nginx
+    restart: unless-stopped
+    profiles: ["production"]
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - radio-net
+
+networks:
+  radio-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  backend_uploads:
